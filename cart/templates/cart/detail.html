@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Корзина</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+        }
+        .total {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: right;
+            margin-top: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+        }
+        .messages {
+            list-style: none;
+            padding: 0;
+        }
+        .messages li {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Корзина</h1>
+            <a href="/" class="btn">Вернуться в магазин</a>
+        </div>
+
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if cart.items.exists %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Цена</th>
+                        <th>Количество</th>
+                        <th>Сумма</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cart.items.all %}
+                    <tr>
+                        <td>{{ item.product.name }}</td>
+                        <td>{{ item.product.price }} ₽</td>
+                        <td>
+                            <form method="post" action="{% url 'cart_update' item.id %}" style="display: inline;">
+                                {% csrf_token %}
+                                <input type="number" name="quantity" value="{{ item.quantity }}" min="1" onchange="this.form.submit()">
+                            </form>
+                        </td>
+                        <td>{{ item.get_cost }} ₽</td>
+                        <td>
+                            <a href="{% url 'cart_remove' item.id %}" class="btn btn-danger" onclick="return confirm('Удалить товар?')">Удалить</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="total">
+                Итого: {{ cart.get_total }} ₽
+            </div>
+
+            <div style="text-align: right; margin-top: 20px;">
+                <button id="orderBtn" class="btn" style="background: #28a745;">Оформить заказ</button>
+            </div>
+        {% else %}
+            <p>Корзина пуста.
+      <a href="/">Перейти к покупкам</a></p>
+        {% endif %}
+    </div>
+<!-- Модальное окно для заявки -->
+<div id="orderModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Оформление заявки</h2>
+        <p>Заполните форму, и мы свяжемся с вами для подтверждения заказа</p>
+
+        <form id="orderForm">
+            <div class="form-group">
+                <label for="name">Ваше имя:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Телефон:</label>
+                <input type="tel" id="phone" name="phone" required placeholder="+7 (___) ___-__-__">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="comment">Комментарий к заказу:</label>
+                <textarea id="comment" name="comment" rows="3"></textarea>
+            </div>
+
+            <h3>Ваш заказ:</h3>
+            <ul style="text-align: left;">
+                {% for item in cart.items.all %}
+                <li>{{ item.product.name }} - {{ item.quantity }} шт. x {{ item.product.price }} ₽ = {{ item.get_cost }} ₽</li>
+                {% endfor %}
+            </ul>
+            <p><strong>Итого: {{ cart.get_total }} ₽</strong></p>
+
+            <button type="submit" class="btn" style="background: #28a745; width: 100%;">Отправить заявку</button>
+        </form>
+
+        <div id="orderSuccess" style="display: none; color: #28a745; margin-top: 20px;">
+            ✅ Спасибо! Ваша заявка отправлена. Мы свяжемся с вами в ближайшее время.
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Стили для модального окна */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 30px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        position: relative;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .close {
+        position: absolute;
+        right: 20px;
+        top: 10px;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        color: #666;
+    }
+
+    .close:hover {
+        color: #333;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+        text-align: left;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+</style>
+
+<script>
+    // Получаем элементы
+    var modal = document.getElementById('orderModal');
+    var btn = document.getElementById('orderBtn');
+    var span = document.getElementsByClassName('close')[0];
+    var form = document.getElementById('orderForm');
+    var successDiv = document.getElementById('orderSuccess');
+
+    // Когда пользователь кликает на кнопку, открываем модальное окно
+    btn.onclick = function(event) {
+        event.preventDefault();
+        modal.style.display = "block";
+    }
+
+    // Когда пользователь кликает на <span> (x), закрываем окно
+    span.onclick = function() {
+        modal.style.display = "none";
+        form.style.display = "block";
+        successDiv.style.display = "none";
+        form.reset();
+    }
+
+    // Когда пользователь кликает вне модального окна, закрываем его
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.
+            style.display = "none";
+            form.style.display = "block";
+            successDiv.style.display = "none";
+            form.reset();
+        }
+    }
+
+   // Обработка отправки формы
+form.onsubmit = function(event) {
+    event.preventDefault();
+
+    // Собираем данные формы
+    var formData = {
+        name: document.getElementById('name').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        comment: document.getElementById('comment').value
+    };
+
+    // Отправляем на сервер
+    fetch('{% url 'create_order' %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            form.style.display = "none";
+            successDiv.style.display = "block";
+
+            // Через 3 секунды закрываем окно
+            setTimeout(function() {
+                modal.style.display = "none";
+                form.style.display = "block";
+                successDiv.style.display = "none";
+                form.reset();
+                // Перезагружаем страницу, чтобы обновить корзину
+                location.reload();
+            }, 3000);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Произошла ошибка при отправке');
+    });
+}
+</script>
+</body>
+</html>
